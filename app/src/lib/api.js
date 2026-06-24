@@ -40,7 +40,7 @@ export const profilesApi = {
   async getAll() {
     const { data, error } = await supabase
       .from('profiles')
-      .select('*, turmas(name)')
+      .select('*, turmas!fk_profiles_turma_id(name)')
       .order('name');
     if (error) throw error;
     return data;
@@ -49,7 +49,7 @@ export const profilesApi = {
   async getById(id) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('*, turmas(name)')
+      .select('*, turmas!fk_profiles_turma_id(name)')
       .eq('id', id)
       .single();
     if (error) throw error;
@@ -134,7 +134,7 @@ export const projectsApi = {
   async getAll(filters = {}) {
     let query = supabase
       .from('projects')
-      .select('*, profiles!projects_author_id_fkey(name, avatar_initials), turmas(name)')
+      .select('*, profiles!projects_author_id_fkey(name, avatar_initials, avatar_url), turmas(name)')
       .order('updated_at', { ascending: false });
 
     if (filters.turmaId) query = query.eq('turma_id', filters.turmaId);
@@ -150,7 +150,7 @@ export const projectsApi = {
   async getById(id) {
     const { data, error } = await supabase
       .from('projects')
-      .select('*, profiles!projects_author_id_fkey(name, avatar_initials, email), turmas(name)')
+      .select('*, profiles!projects_author_id_fkey(name, avatar_initials, email, avatar_url), turmas(name)')
       .eq('id', id)
       .single();
     if (error) throw error;
@@ -190,7 +190,7 @@ export const versionsApi = {
   async getByProject(projectId) {
     const { data, error } = await supabase
       .from('versions')
-      .select('*, profiles(name, avatar_initials)')
+      .select('*, profiles(name, avatar_initials, avatar_url)')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -225,7 +225,7 @@ export const commentsApi = {
   async getByProject(projectId) {
     const { data, error } = await supabase
       .from('comments')
-      .select('*, profiles(name, avatar_initials, role)')
+      .select('*, profiles(name, avatar_initials, role, avatar_url)')
       .eq('project_id', projectId)
       .order('created_at', { ascending: true });
     if (error) throw error;
@@ -236,7 +236,7 @@ export const commentsApi = {
     const { data, error } = await supabase
       .from('comments')
       .insert(comment)
-      .select('*, profiles(name, avatar_initials, role)')
+      .select('*, profiles(name, avatar_initials, role, avatar_url)')
       .single();
     if (error) throw error;
     return data;
@@ -391,7 +391,7 @@ export const activityApi = {
   async getRecent(limit = 20) {
     const { data, error } = await supabase
       .from('activity')
-      .select('*, profiles(name, avatar_initials)')
+      .select('*, profiles(name, avatar_initials, avatar_url)')
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error) throw error;

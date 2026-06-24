@@ -11,7 +11,8 @@ CREATE TABLE public.profiles (
   email            TEXT,
   role             TEXT NOT NULL DEFAULT 'aluno' CHECK (role IN ('aluno','professor','admin')),
   avatar_initials  TEXT DEFAULT 'U',
-  turma_id         UUID REFERENCES public.turmas(id) ON DELETE SET NULL,
+  avatar_url       TEXT,
+  turma_id         UUID,
   active           BOOLEAN DEFAULT TRUE,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
@@ -24,6 +25,10 @@ CREATE TABLE public.turmas (
   professor_id  UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Chave estrangeira de profiles para turmas (evita dependência circular na criação das tabelas)
+ALTER TABLE public.profiles
+  ADD CONSTRAINT fk_profiles_turma_id FOREIGN KEY (turma_id) REFERENCES public.turmas(id) ON DELETE SET NULL;
 
 -- 3. PROJECTS
 CREATE TABLE public.projects (

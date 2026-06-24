@@ -21,7 +21,7 @@ export default function Sidebar() {
   };
 
   return (
-    <nav className="sidebar">
+    <nav className="app-sidebar sidebar">
       <p className="sidebar-section-title">Menu</p>
 
       {navItems.map(({ to, icon: Icon, label, end }) => (

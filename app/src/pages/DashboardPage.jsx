@@ -118,7 +118,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {activity.map(a => (
                 <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <Avatar initials={a.profiles?.avatar_initials} size="sm" />
+                  <Avatar initials={a.profiles?.avatar_initials} url={a.profiles?.avatar_url} size="sm" />
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 13 }}>
                       <strong>{a.profiles?.name}</strong>{' '}

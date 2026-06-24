@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { profilesApi } from '../lib/api';
-import { User, Save, Key } from 'lucide-react';
+import { User, Save, Key, Camera } from 'lucide-react';
 import { RoleBadge } from '../components/ui/Badge';
 import Avatar from '../components/ui/Avatar';
 import { supabase } from '../lib/supabase';
@@ -9,21 +9,64 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
 export default function ProfilePage() {
-  const { profile, user } = useAuth();
+  const { profile, setProfile, user } = useAuth();
   const [form, setForm] = useState({ name: profile?.name || '' });
   const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const handleSave = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const initials = form.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-      await profilesApi.update(profile.id, { name: form.name, avatar_initials: initials });
+      const updated = await profilesApi.update(profile.id, { name: form.name, avatar_initials: initials });
+      setProfile(updated);
       toast.success('Perfil atualizado!');
     } catch { toast.error('Erro ao atualizar perfil'); }
     finally { setLoading(false); }
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 2MB');
+      return;
+    }
+
+    setUploading(true);
+    const toastId = toast.loading('A carregar imagem...');
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `avatars/${profile.id}-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('project-files')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('project-files')
+        .getPublicUrl(path);
+
+      const publicUrl = urlData.publicUrl;
+
+      const updated = await profilesApi.update(profile.id, { avatar_url: publicUrl });
+      setProfile(updated);
+      toast.success('Imagem de perfil atualizada!', { id: toastId });
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao carregar imagem: ' + (err.message || ''), { id: toastId });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handlePassword = async (e) => {
@@ -52,12 +95,24 @@ export default function ProfilePage() {
       {/* Profile card */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 28 }}>
-          <Avatar initials={profile?.avatar_initials} size="lg" />
+          <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => document.getElementById('avatar-upload').click()}>
+            <Avatar initials={profile?.avatar_initials} url={profile?.avatar_url} size="lg" />
+            <div style={{
+              position: 'absolute', bottom: -2, right: -2, background: 'var(--accent)',
+              borderRadius: '50%', padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: '2px solid var(--bg-surface)', width: 22, height: 22
+            }}>
+              <Camera size={12} style={{ color: '#fff' }} />
+            </div>
+          </div>
+          <input type="file" id="avatar-upload" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} disabled={uploading} />
+
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 700 }}>{profile?.name}</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{user?.email}</p>
-            <div style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
               <RoleBadge role={profile?.role} />
+              {uploading && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>A carregar...</span>}
             </div>
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>

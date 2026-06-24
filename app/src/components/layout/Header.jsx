@@ -17,7 +17,7 @@ export default function Header() {
   };
 
   return (
-    <header className="header">
+    <header className="app-header header">
       <div className="header-logo">
         <span>⬡</span> FCTHub
       </div>
@@ -40,7 +40,7 @@ export default function Header() {
         </div>
 
         <button className="flex items-center gap-8" onClick={() => navigate('/profile')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-          <Avatar initials={profile?.avatar_initials} size="sm" />
+          <Avatar initials={profile?.avatar_initials} url={profile?.avatar_url} size="sm" />
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
             {profile?.name?.split(' ')[0]}
           </span>

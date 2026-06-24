@@ -226,7 +226,7 @@ export default function ProjectDetailPage() {
               </div>
             ) : comments.map(c => (
               <div key={c.id} className="card card-sm" style={{ display: 'flex', gap: 12 }}>
-                <Avatar initials={c.profiles?.avatar_initials} size="sm" />
+                <Avatar initials={c.profiles?.avatar_initials} url={c.profiles?.avatar_url} size="sm" />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
                     <strong style={{ fontSize: 13 }}>{c.profiles?.name}</strong>

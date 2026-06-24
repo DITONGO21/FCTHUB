@@ -113,7 +113,7 @@ export default function AdminPage() {
                 <tr key={u.id}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <Avatar initials={u.avatar_initials} size="sm" />
+                      <Avatar initials={u.avatar_initials} url={u.avatar_url} size="sm" />
                       <span style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</span>
                     </div>
                   </td>
