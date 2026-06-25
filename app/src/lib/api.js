@@ -32,6 +32,11 @@ export const authApi = {
   onAuthStateChange(callback) {
     return supabase.auth.onAuthStateChange(callback);
   },
+
+  async resetPassword(email) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw error;
+  },
 };
 
 // ── Profiles ──────────────────────────────────────────────────────────────────
@@ -85,7 +90,7 @@ export const turmasApi = {
   async getAll() {
     const { data, error } = await supabase
       .from('turmas')
-      .select('*, profiles!turmas_professor_id_fkey(name)')
+      .select('*, turma_professors(professor_id, profiles(id, name))')
       .order('name');
     if (error) throw error;
     return data;
@@ -94,32 +99,51 @@ export const turmasApi = {
   async getById(id) {
     const { data, error } = await supabase
       .from('turmas')
-      .select('*, profiles!turmas_professor_id_fkey(name)')
+      .select('*, turma_professors(professor_id, profiles(id, name))')
       .eq('id', id)
       .single();
     if (error) throw error;
     return data;
   },
 
-  async create(turma) {
+  async create(turma, professorIds = []) {
     const { data, error } = await supabase
       .from('turmas')
-      .insert(turma)
+      .insert({ name: turma.name, description: turma.description })
       .select()
       .single();
     if (error) throw error;
-    return data;
+
+    // Insert professors into junction table
+    if (professorIds.length > 0) {
+      const rows = professorIds.map(pid => ({ turma_id: data.id, professor_id: pid }));
+      const { error: jpError } = await supabase.from('turma_professors').insert(rows);
+      if (jpError) throw jpError;
+    }
+
+    // Re-fetch with professors
+    return await turmasApi.getById(data.id);
   },
 
-  async update(id, updates) {
+  async update(id, updates, professorIds = []) {
     const { data, error } = await supabase
       .from('turmas')
-      .update(updates)
+      .update({ name: updates.name, description: updates.description })
       .eq('id', id)
       .select()
       .single();
     if (error) throw error;
-    return data;
+
+    // Replace professors: delete all, then re-insert
+    await supabase.from('turma_professors').delete().eq('turma_id', id);
+    if (professorIds.length > 0) {
+      const rows = professorIds.map(pid => ({ turma_id: id, professor_id: pid }));
+      const { error: jpError } = await supabase.from('turma_professors').insert(rows);
+      if (jpError) throw jpError;
+    }
+
+    // Re-fetch with professors
+    return await turmasApi.getById(id);
   },
 
   async delete(id) {

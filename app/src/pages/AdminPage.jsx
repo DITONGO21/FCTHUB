@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { profilesApi, turmasApi, projectsApi } from '../lib/api';
-import { Users, GraduationCap, FolderKanban, Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { profilesApi, turmasApi, projectsApi, authApi } from '../lib/api';
+import { Users, GraduationCap, FolderKanban, Plus, Trash2, ToggleLeft, ToggleRight, Pencil, KeyRound } from 'lucide-react';
 import { RoleBadge, StatusBadge } from '../components/ui/Badge';
 import Avatar from '../components/ui/Avatar';
 import { format } from 'date-fns';
@@ -19,6 +19,8 @@ export default function AdminPage() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showTurmaModal, setShowTurmaModal] = useState(false);
+  const [editingTurma, setEditingTurma] = useState(null);
+  const [editingProject, setEditingProject] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -38,6 +40,14 @@ export default function AdminPage() {
     } catch { toast.error('Erro ao atualizar'); }
   };
 
+  const resetPassword = async (email) => {
+    if (!confirm(`Enviar email de reset de password para ${email}?`)) return;
+    try {
+      await authApi.resetPassword(email);
+      toast.success(`Email de reset enviado para ${email}`);
+    } catch { toast.error('Erro ao enviar email de reset'); }
+  };
+
   const deleteTurma = async (id) => {
     if (!confirm('Eliminar turma?')) return;
     try {
@@ -49,12 +59,20 @@ export default function AdminPage() {
 
   if (loading) return <div className="page-loading"><div className="spinner" /></div>;
 
+  const professors = users.filter(u => u.role === 'professor');
+
   const stats = {
     users:    users.length,
     alunos:   users.filter(u => u.role === 'aluno').length,
-    profs:    users.filter(u => u.role === 'professor').length,
+    profs:    professors.length,
     projects: projects.length,
     concluidos: projects.filter(p => p.status === 'concluido').length,
+  };
+
+  // Helper to get professor names from turma_professors relation
+  const getTurmaProfessors = (turma) => {
+    if (!turma.turma_professors || turma.turma_professors.length === 0) return 'Sem professor';
+    return turma.turma_professors.map(tp => tp.profiles?.name).filter(Boolean).join(', ');
   };
 
   return (
@@ -127,10 +145,16 @@ export default function AdminPage() {
                     </span>
                   </td>
                   <td>
-                    <button className="btn btn-ghost btn-sm" onClick={() => toggleUser(u.id, u.active !== false)}
-                      title={u.active ? 'Desativar' : 'Ativar'}>
-                      {u.active !== false ? <ToggleRight size={18} style={{ color: 'var(--green)' }} /> : <ToggleLeft size={18} style={{ color: 'var(--text-muted)' }} />}
-                    </button>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => toggleUser(u.id, u.active !== false)}
+                        title={u.active ? 'Desativar' : 'Ativar'}>
+                        {u.active !== false ? <ToggleRight size={18} style={{ color: 'var(--green)' }} /> : <ToggleLeft size={18} style={{ color: 'var(--text-muted)' }} />}
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => resetPassword(u.email)}
+                        title="Reset Password">
+                        <KeyRound size={16} style={{ color: 'var(--accent)' }} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -149,12 +173,17 @@ export default function AdminPage() {
                   <h3 style={{ fontWeight: 700, fontSize: 15 }}>{t.name}</h3>
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{t.description}</p>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-                    👩‍🏫 {t.profiles?.name || 'Sem professor'}
+                    👩‍🏫 {getTurmaProfessors(t)}
                   </p>
                 </div>
-                <button className="btn btn-danger btn-sm" onClick={() => deleteTurma(t.id)}>
-                  <Trash2 size={13} />
-                </button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingTurma(t)} title="Editar Turma">
+                    <Pencil size={13} style={{ color: 'var(--accent)' }} />
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => deleteTurma(t.id)}>
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
               <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
                 {projects.filter(p => p.turma_id === t.id).length} projeto(s)
@@ -176,6 +205,7 @@ export default function AdminPage() {
                 <th>Empresa</th>
                 <th>Estado</th>
                 <th>Atualizado</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -187,6 +217,11 @@ export default function AdminPage() {
                   <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{p.empresa || '—'}</td>
                   <td><StatusBadge status={p.status} /></td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{format(new Date(p.updated_at || p.created_at), 'dd/MM/yy')}</td>
+                  <td>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setEditingProject(p)} title="Editar Projeto">
+                      <Pencil size={14} style={{ color: 'var(--accent)' }} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -195,10 +230,34 @@ export default function AdminPage() {
       )}
 
       {showTurmaModal && (
-        <NewTurmaModal
-          professors={users.filter(u => u.role === 'professor')}
+        <TurmaModal
+          professors={professors}
           onClose={() => setShowTurmaModal(false)}
-          onCreated={(t) => { setTurmas(prev => [...prev, t]); setShowTurmaModal(false); }}
+          onSaved={(t) => { setTurmas(prev => [...prev, t]); setShowTurmaModal(false); }}
+        />
+      )}
+
+      {editingTurma && (
+        <TurmaModal
+          turma={editingTurma}
+          professors={professors}
+          onClose={() => setEditingTurma(null)}
+          onSaved={(t) => {
+            setTurmas(prev => prev.map(x => x.id === t.id ? t : x));
+            setEditingTurma(null);
+          }}
+        />
+      )}
+
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          turmas={turmas}
+          onClose={() => setEditingProject(null)}
+          onSaved={(p) => {
+            setProjects(prev => prev.map(x => x.id === p.id ? { ...x, ...p } : x));
+            setEditingProject(null);
+          }}
         />
       )}
     </div>
@@ -215,26 +274,53 @@ function StatCard({ icon, label, value }) {
   );
 }
 
-function NewTurmaModal({ professors, onClose, onCreated }) {
+// ── Turma Modal (Create + Edit) ─────────────────────────────────────────────
+
+function TurmaModal({ turma, professors, onClose, onSaved }) {
+  const isEdit = !!turma;
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', professor_id: '' });
+  const [form, setForm] = useState({
+    name: turma?.name || '',
+    description: turma?.description || '',
+  });
+
+  // Extract existing professor IDs from turma_professors relation
+  const existingProfIds = turma?.turma_professors
+    ? turma.turma_professors.map(tp => tp.professor_id)
+    : [];
+  const [selectedProfessors, setSelectedProfessors] = useState(existingProfIds);
+
+  const toggleProfessor = (profId) => {
+    setSelectedProfessors(prev =>
+      prev.includes(profId) ? prev.filter(id => id !== profId) : [...prev, profId]
+    );
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const t = await turmasApi.create(form);
-      toast.success('Turma criada!');
-      onCreated(t);
-    } catch { toast.error('Erro ao criar turma'); }
-    finally { setLoading(false); }
+      let result;
+      if (isEdit) {
+        result = await turmasApi.update(turma.id, form, selectedProfessors);
+        toast.success('Turma atualizada!');
+      } else {
+        result = await turmasApi.create(form, selectedProfessors);
+        toast.success('Turma criada!');
+      }
+      onSaved(result);
+    } catch {
+      toast.error(isEdit ? 'Erro ao atualizar turma' : 'Erro ao criar turma');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="modal-overlay">
       <div className="modal">
         <div className="modal-header">
-          <h2 className="modal-title">Nova Turma</h2>
+          <h2 className="modal-title">{isEdit ? 'Editar Turma' : 'Nova Turma'}</h2>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
         </div>
         <form className="modal-form" onSubmit={handleSubmit}>
@@ -249,15 +335,122 @@ function NewTurmaModal({ professors, onClose, onCreated }) {
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
           </div>
           <div className="field">
-            <label>Professor Tutor</label>
-            <select className="input" value={form.professor_id} onChange={e => setForm(f => ({ ...f, professor_id: e.target.value }))}>
-              <option value="">Sem professor</option>
-              {professors.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <label>Professores</label>
+            {professors.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nenhum professor registado</p>
+            ) : (
+              <div style={{
+                display: 'flex', flexDirection: 'column', gap: 6,
+                maxHeight: 160, overflowY: 'auto',
+                border: '1px solid var(--border)', borderRadius: 8, padding: 10,
+                background: 'var(--bg-secondary)',
+              }}>
+                {professors.map(p => (
+                  <label key={p.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    fontSize: 13, cursor: 'pointer', padding: '4px 0',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedProfessors.includes(p.id)}
+                      onChange={() => toggleProfessor(p.id)}
+                      style={{ accentColor: 'var(--accent)' }}
+                    />
+                    <span style={{ fontWeight: 500 }}>{p.name}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.email}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'A criar...' : 'Criar Turma'}</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? (isEdit ? 'A guardar...' : 'A criar...') : (isEdit ? 'Guardar' : 'Criar Turma')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit Project Modal ──────────────────────────────────────────────────────
+
+function EditProjectModal({ project, turmas, onClose, onSaved }) {
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({
+    title: project.title || '',
+    description: project.description || '',
+    empresa: project.empresa || '',
+    status: project.status || 'pendente',
+    turma_id: project.turma_id || '',
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = { ...form, turma_id: form.turma_id || null };
+      const updated = await projectsApi.update(project.id, payload);
+      toast.success('Projeto atualizado!');
+      onSaved(updated);
+    } catch {
+      toast.error('Erro ao atualizar projeto');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal">
+        <div className="modal-header">
+          <h2 className="modal-title">Editar Projeto</h2>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+        </div>
+        <form className="modal-form" onSubmit={handleSubmit}>
+          <div className="field">
+            <label>Título *</label>
+            <input className="input" value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
+          </div>
+          <div className="field">
+            <label>Descrição</label>
+            <textarea className="input" rows={3} value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              style={{ resize: 'vertical' }} />
+          </div>
+          <div className="field">
+            <label>Empresa</label>
+            <input className="input" placeholder="Nome da empresa..." value={form.empresa}
+              onChange={e => setForm(f => ({ ...f, empresa: e.target.value }))} />
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="field" style={{ flex: 1 }}>
+              <label>Estado</label>
+              <select className="input" value={form.status}
+                onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <option value="pendente">Pendente</option>
+                <option value="em_progresso">Em Progresso</option>
+                <option value="concluido">Concluído</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div className="field" style={{ flex: 1 }}>
+              <label>Turma</label>
+              <select className="input" value={form.turma_id}
+                onChange={e => setForm(f => ({ ...f, turma_id: e.target.value }))}>
+                <option value="">Sem turma</option>
+                {turmas.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'A guardar...' : 'Guardar'}
+            </button>
           </div>
         </form>
       </div>
